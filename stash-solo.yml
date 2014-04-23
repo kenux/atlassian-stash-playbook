@@ -1,0 +1,11 @@
+- hosts: webservers
+  sudo: yes
+  roles:
+    - common
+    - stash
+    - webproxy
+  handlers:
+    - name: restart-iptables
+      service: name=iptables state=restarted
+    - name: restart-apache
+      service: name=httpd state=restarted

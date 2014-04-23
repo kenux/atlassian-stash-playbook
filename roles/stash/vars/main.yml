@@ -1,0 +1,7 @@
+stash_home: /opt/atlassian-stash/stash-home
+stash_install: /opt/atlassian-stash/atlassian-stash-2.12.0
+stash_user: stash
+stash_user_password: CHANGEMEORGETFIRED123
+http_proxy_scheme: \"http\"
+http_proxy_name: \"web\"
+http_proxy_port: \"80\"

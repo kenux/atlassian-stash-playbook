@@ -1,0 +1,151 @@
+#!/bin/sh
+#
+# stash     Startup script for stash.
+#
+# chkconfig: 2345 85 28
+# description: Initscript for Atlassian Stash
+ 
+### BEGIN INIT INFO
+# Provides: $stash
+# Required-Start: $local_fs $network $syslog
+# Required-Stop: $local_fs $syslog
+# Should-Start: $syslog
+# Should-Stop: $network $syslog
+# Default-Start: 2 3 4 5
+# Default-Stop: 0 1 6
+# Short-Dscription: Initscript for Atlassian Stash
+# Description: Automatically start Atlassian Stash when the system starts up.
+#              Provide commands for manually starting and stopping Stash.
+### END INIT INFO
+#
+# Author: Billy Wilson
+#         <billybob.wilson AT gmail.com>.
+ 
+# Source function library
+. /etc/rc.d/init.d/functions
+ 
+# RUNUSER: The user to run stash as
+RUNUSER={{ stash_user }}
+# STASH_INSTALLDIR: The path to the Stash installation directory
+STASH_INSTALLDIR="{{ stash_install }}"
+# STASH_HOME: Path to the Stash home directory
+STASH_HOME="{{ stash_home }}"
+ 
+ 
+# STASH_BINDIR: The path to the Stash installation binaries
+STASH_BINDIR="$STASH_INSTALLDIR/bin"
+ 
+# STASH_PID: The path to the Stash PID file
+STASH_PID="$STASH_INSTALLDIR/work/catalina.pid"
+ 
+# For SELinux we need to use 'runuser' instead of 'su'
+if [ -x /sbin/runuser ]
+then
+    SU=runuser
+else
+    SU=su
+fi
+ 
+# Set defaults for Stash name and description
+NAME=stash
+DESC="Atlassian Stash"
+ 
+# Read configuration variable file if present
+[ -r /etc/default/$NAME ] && . /etc/default/$NAME
+ 
+ 
+# Function to run commands as $RUNUSER with $STASH_HOME exported
+run_with_home() {
+    if [ "$RUNUSER" != "$USER" ]
+    then
+        $SU - "$RUNUSER" -c "export STASH_HOME=$STASH_HOME; $STASH_BINDIR/$1"
+    else
+        export STASH_HOME=$STASH_HOME; $STASH_BINDIR/$1
+    fi
+}
+ 
+script_result=0
+ 
+start(){
+    [ -x "$STASH_BINDIR/start-stash.sh" ] || exit 5
+ 
+    STASH_START=$"Starting $NAME service: "
+ 
+    if [ -e $STASH_PID ]
+    then
+        echo $"$NAME is already running as PID `cat $STASH_PID` (or the PID file is dead)."
+        echo_failure
+        echo
+        exit 1
+    else
+        echo -n "$STASH_START"
+        run_with_home start-stash.sh > /dev/null
+        sleep 2
+        pid=`head -n 1 "$STASH_PID" 2>/dev/null`
+        if [ "x$pid" != x ]
+        then
+            success "$STASH_START"
+            echo
+        else
+            failure "$STASH_START"
+            echo
+            script_result=1
+        fi
+    fi
+}
+ 
+stop(){
+    [ -x "$STASH_BINDIR/stop-stash.sh" ] || exit 5
+ 
+    echo -n $"Stopping $NAME service: "
+    if [ -e "$STASH_HOME/.lock" ]; then
+        run_with_home stop-stash.sh > /dev/null
+        ret=$?
+        if [ $ret -eq 0 ]
+        then
+            echo_success
+        else
+            echo_failure
+            script_result=1
+        fi
+    else
+        # not running; per LSB standards this is "ok"
+        echo_success
+    fi
+    echo
+}
+ 
+ 
+restart(){
+    stop
+    start
+}
+ 
+condrestart(){
+    [ -e "$STASH_HOME/.lock" ] && restart || :
+}
+ 
+ 
+case "$1" in
+  start)
+    start
+    ;;
+  stop)
+    stop
+    ;;
+  status)
+    status -p "$STASH_PID" stash
+    script_result=$?
+    ;;
+  restart)
+    restart
+    ;;
+  condrestart|try-restart)
+    condrestart
+    ;;
+  *)
+    echo $"Usage: $0 {start|stop|status|restart|condrestart|try-restart}" >&2
+    exit 2
+esac
+ 
+exit $script_result

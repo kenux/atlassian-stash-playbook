@@ -1,0 +1,74 @@
+- name: Install requirements
+  yum: name={{ item }} state=present
+  with_items:
+    - java-1.7.0-openjdk
+    - git
+    - perl
+    - autoconf
+    - zlib-devel
+    - perl-ExtUtils-MakeMaker
+    - gettext
+    - redhat-lsb
+
+- name: Download latest git
+  git: repo=https://github.com/git/git
+       dest=/tmp/git
+
+- name: create install script
+  lineinfile: dest=/tmp/git/gitinstall.sh
+              create=yes 
+              line="{{ item }}"
+  with_items:
+    - "cd /tmp/git"
+    - "make configure"
+    - "./configure --prefix /usr"
+    - "make install"
+
+- name: Uninstall current git
+  yum: name=git state=absent
+
+- name: Make script executable
+  file: path=/tmp/git/gitinstall.sh mode=0777
+
+- name: install latest git
+  command: sudo /tmp/git/gitinstall.sh
+
+- name: create stash user
+  user: name=stash comment="Stash service user" createhome=no home={{ stash_home }} password={{ stash_user_password }}
+
+- name: create stash folder
+  file: path=/opt/atlassian-stash owner=stash group=stash mode=0755 state=directory
+
+- name: create stash HOME folder
+  file: path={{ stash_home }} owner=stash group=stash mode=0755 state=directory
+
+- name: unarchive stash installer(local)
+  unarchive: src=atlassian-stash-2.12.0.tar.gz dest=/opt/atlassian-stash
+
+- name: set permissions for stash user on install and home folders
+  file: path=/opt/atlassian-stash owner=stash group=stash recurse=yes
+
+- name: set home folder in stash config
+  lineinfile: dest={{ stash_install }}/bin/setenv.sh
+              regexp="^#STASH_HOME="
+              line="STASH_HOME={{ stash_home }}"
+
+- name: configure catalina server for webproxy
+  lineinfile: dest={{ stash_install }}/conf/server.xml
+              regexp="^{{ item }}"
+              line="{{ item }}"
+              insertafter="<Connector port=\"7990\""
+  with_items:
+    - scheme="{{ http_proxy_scheme }}"
+    - proxyName="{{ http_proxy_name }}"
+    - proxyPort="{{ http_proxy_port }}"
+
+- name: stash init template
+  template: src=stashinit-rhel.j2 dest=/etc/init.d/stash owner=root group=root mode=0756
+
+- name: update init
+  command: sudo chkconfig --add stash --level 0356
+
+- name: start stash
+  service: name=stash state=started
+
